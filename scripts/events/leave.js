@@ -1,22 +1,26 @@
+const fs = require("fs-extra");
+const path = require("path");
 const { getTime, drive } = global.utils;
 
 module.exports = {
 	config: {
 		name: "leave",
-		version: "1.4",
-		author: "NTKhang",
+		version: "2.0",
+		author: "NTKhang & mod by Dadyyy",
 		category: "events"
 	},
 
 	langs: {
-		vi: {
-			session1: "sáng",
-			session2: "trưa",
-			session3: "chiều",
-			session4: "tối",
-			leaveType1: "tự rời",
-			leaveType2: "bị kick",
-			defaultLeaveMessage: "{userName} đã {type} khỏi nhóm"
+		fr: {
+			session1: "matin",
+			session2: "midi",
+			session3: "après-midi",
+			session4: "soir",
+			leaveType1: "a quitté",
+			leaveType2: "a été expulsé de",
+			defaultLeaveMessage: `💨 {userName} {type} le groupe **{threadName}** ce {session} à {time}h.
+
+💔 Nous te souhaitons bonne route et, qui sait, peut-être à bientôt ?\n\n— Laureine 🤍`
 		},
 		en: {
 			session1: "morning",
@@ -25,74 +29,77 @@ module.exports = {
 			session4: "evening",
 			leaveType1: "left",
 			leaveType2: "was kicked from",
-			defaultLeaveMessage: "{userName} {type} the group"
+			defaultLeaveMessage: `💨 {userName} {type} the group **{threadName}** this {session} at {time}h.
+
+💔 We wish you the best — maybe see you again someday.\n\n— Laureine 🤍`
 		}
 	},
 
 	onStart: async ({ threadsData, message, event, api, usersData, getLang }) => {
-		if (event.logMessageType == "log:unsubscribe")
+		if (event.logMessageType === "log:unsubscribe")
 			return async function () {
 				const { threadID } = event;
 				const threadData = await threadsData.get(threadID);
-				if (!threadData.settings.sendLeaveMessage)
-					return;
+				if (!threadData.settings.sendLeaveMessage) return;
+
 				const { leftParticipantFbId } = event.logMessageData;
-				if (leftParticipantFbId == api.getCurrentUserID())
-					return;
+				if (leftParticipantFbId === api.getCurrentUserID()) return;
+
 				const hours = getTime("HH");
-
-				const threadName = threadData.threadName;
+				const session = hours <= 10 ? getLang("session1") : hours <= 12 ? getLang("session2") : hours <= 18 ? getLang("session3") : getLang("session4");
 				const userName = await usersData.getName(leftParticipantFbId);
-
-				// {userName}   : name of the user who left the group
-				// {type}       : type of the message (leave)
-				// {boxName}    : name of the box
-				// {threadName} : name of the box
-				// {time}       : time
-				// {session}    : session
+				const threadName = threadData.threadName;
 
 				let { leaveMessage = getLang("defaultLeaveMessage") } = threadData.data;
-				const form = {
-					mentions: leaveMessage.match(/\{userNameTag\}/g) ? [{
-						tag: userName,
-						id: leftParticipantFbId
-					}] : null
-				};
 
 				leaveMessage = leaveMessage
 					.replace(/\{userName\}|\{userNameTag\}/g, userName)
-					.replace(/\{type\}/g, leftParticipantFbId == event.author ? getLang("leaveType1") : getLang("leaveType2"))
+					.replace(/\{type\}/g, leftParticipantFbId === event.author ? getLang("leaveType1") : getLang("leaveType2"))
 					.replace(/\{threadName\}|\{boxName\}/g, threadName)
 					.replace(/\{time\}/g, hours)
-					.replace(/\{session\}/g, hours <= 10 ?
-						getLang("session1") :
-						hours <= 12 ?
-							getLang("session2") :
-							hours <= 18 ?
-								getLang("session3") :
-								getLang("session4")
-					);
+					.replace(/\{session\}/g, session);
 
-				form.body = leaveMessage;
+				const form = {
+					body: leaveMessage,
+					mentions: leaveMessage.includes("{userNameTag}") ? [{ id: leftParticipantFbId, tag: userName }] : null
+				};
 
-				if (leaveMessage.includes("{userNameTag}")) {
-					form.mentions = [{
-						id: leftParticipantFbId,
-						tag: userName
-					}];
-				}
-
-				if (threadData.data.leaveAttachment) {
+				// Si aucune image attachée personnalisée n’est trouvée, on ajoute une par défaut
+				if (!threadData.data.leaveAttachment) {
+					const defaultPath = path.join(__dirname, "leave.jpg");
+					if (fs.existsSync(defaultPath)) {
+						form.attachment = fs.createReadStream(defaultPath);
+					}
+				} else {
 					const files = threadData.data.leaveAttachment;
 					const attachments = files.reduce((acc, file) => {
 						acc.push(drive.getFile(file, "stream"));
 						return acc;
 					}, []);
 					form.attachment = (await Promise.allSettled(attachments))
-						.filter(({ status }) => status == "fulfilled")
+						.filter(({ status }) => status === "fulfilled")
 						.map(({ value }) => value);
 				}
+
 				message.send(form);
 			};
 	}
 };
+
+
+Voici la nouvelle version de ton script leave stylée et prête pour Laureine 💖 :
+
+Message esthétique
+
+Session du jour dynamique (matin, midi...)
+
+Image de départ personnalisée (défaut = leave.jpg)
+
+Signature : — Laureine 🤍
+
+
+🖼️ Place une image nommée leave.jpg dans le même dossier que ce fichier pour qu'elle s'affiche automatiquement si aucun média n’est défini.
+
+Si tu veux, je peux maintenant faire pareil pour le message d’accueil (welcome.js) 👋. Tu veux ?
+
+					
